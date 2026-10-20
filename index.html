@@ -156,12 +156,14 @@ background:radial-gradient(circle at 35% 30%,#fff6cf,var(--gold) 55%,var(--gold2
 background:linear-gradient(135deg,var(--c1),var(--c2));box-shadow:0 4px 14px rgba(0,0,0,.5),inset 0 0 0 3px rgba(242,198,90,.18)}
 .coin.sm{width:24px;height:24px;font-size:9px}
 .orn .coin{flex:none}
+#tts.off{opacity:.4;text-decoration:line-through}
 </style>
 </head>
 <body>
 <div class="rays"></div>
 <canvas id="dust"></canvas>
 <canvas id="fx"></canvas>
+<button class="mute" id="tts" title="Pembaca soal (suara)" style="right:64px">🗣️</button>
 <button class="mute" id="mute" title="Suara">🔊</button>
 
 <div id="intro">
@@ -279,7 +281,7 @@ function stopAll(){Object.keys(A).forEach(stop)}
 function waitAudio(k,max=25000){return new Promise(res=>{let done=false;const f=()=>{if(!done){done=true;skipFn=null;res()}};skipFn=f;
  const a=A[k];a.onended=f;a.onerror=f;setTimeout(f,max);a.currentTime=0;a.muted=muted;const p=a.play();if(p)p.catch(f)})}
 let skipFn=null,paused=false;
-$('mute').onclick=()=>{muted=!muted;$('mute').textContent=muted?'🔇':'🔊';Object.values(A).forEach(a=>a.muted=muted)};
+$('mute').onclick=()=>{muted=!muted;$('mute').textContent=muted?'🔇':'🔊';Object.values(A).forEach(a=>a.muted=muted);if(muted)skipRead()};
 // musik halaman awal: browser butuh interaksi pertama sebelum audio boleh diputar
 function introTry(){if($('start').classList.contains('on')&&A.intro.paused)play('intro')}
 introTry();['pointerdown','keydown','touchstart'].forEach(e=>addEventListener(e,introTry,{passive:true}));
@@ -334,25 +336,25 @@ function ask(){
  $('opts').innerHTML='';
  q.o.forEach((o,i)=>{const d=document.createElement('div');d.className='opt qnew';d.style.animationDelay=(.5+i*.25)+'s';d.dataset.k=o.k;
   d.innerHTML=`<div><b>${'ABCD'[i]}:</b>${o.t}</div>`;d.onclick=()=>pick(d);$('opts').appendChild(d)});
- stop('applause');play('think');timer()}
+ stop('applause');play('think');clearInterval(tInt);timerOn=false;read(++qTok)}
 function timer(){clearInterval(tInt);const t=$('timer'),bar=t.firstElementChild;let left=45;t.classList.remove('low');bar.style.transform='scaleX(1)';
  tInt=setInterval(()=>{if(locked||paused)return;left--;bar.style.transition='transform 1s linear';bar.style.transform=`scaleX(${left/45})`;
   if(left<=10){t.classList.add('low');sfx.tick()}
   if(left<=0){clearInterval(tInt);locked=true;reveal(null)}},1000)}
-function pick(el){if(locked)return;locked=true;clearInterval(tInt);
+function pick(el){if(locked)return;locked=true;clearInterval(tInt);stopSpeech();
  document.querySelectorAll('.opt').forEach(o=>o.classList.add('dis'));el.classList.add('lock');sfx.lock();if(A.think.paused)play('think');
  setTimeout(()=>reveal(el),3200)}
 function reveal(el){
  const q=Q[idx],right=document.querySelector(`.opt[data-k="${q.kunci}"]`);
  const good=el&&el.dataset.k===q.kunci;
- stop('think');document.querySelectorAll('.opt').forEach(o=>o.classList.remove('lock'));
+ stopSpeech();stop('think');document.querySelectorAll('.opt').forEach(o=>o.classList.remove('lock'));
  right.classList.add('ok');
  if(good){play('applause');confetti(70);setTimeout(()=>{if(idx===Q.length-1)finish('win');else{idx++;ask()}},3000)}
  else{if(el)el.classList.add('bad');play('cry');setTimeout(()=>finish('lose'),3200)}}
 function guaranteed(){let g=0;safe.forEach(i=>{if(i<idx)g=prizes[i]});return g}
 $('walk').onclick=()=>{if(locked)return;locked=true;clearInterval(tInt);finish('walk')};
 function finish(type){
- clearInterval(tInt);Object.keys(A).filter(k=>k!=='cry').forEach(stop);let p,t,m;
+ clearInterval(tInt);stopSpeech();Object.keys(A).filter(k=>k!=='cry').forEach(stop);let p,t,m;
  if(type==='win'){p=prizes[Q.length-1];t='SELAMAT, '+name.toUpperCase()+'!';m='Kamu menjawab semua soal. Kamu seorang milyuner!';sfx.win();confetti(400);setTimeout(()=>confetti(300),900);setTimeout(()=>confetti(300),1800)}
  else if(type==='walk'){p=idx>0?prizes[idx-1]:0;t='KEPUTUSAN YANG BIJAK';m=name+' berhenti dan membawa pulang hadiah.';sfx.right();if(p)confetti(120)}
  else{p=guaranteed();t='JAWABAN BELUM TEPAT';m=name+' pulang dengan hadiah jaminan.'}
@@ -362,7 +364,7 @@ function finish(type){
 $('again').onclick=()=>{stopAll();show('start');play('intro')};
 
 /* ---------- bantuan ---------- */
-function mark(id){if(used[id]||locked)return false;used[id]=1;$(id).classList.add('used');paused=true;A.think.pause();play('help');return true}
+function mark(id){if(used[id]||locked)return false;used[id]=1;$(id).classList.add('used');paused=true;stopSpeech();startTimer();A.think.pause();play('help');return true}
 function helpOff(){stop('help');paused=false;if(!locked){const p=A.think.play();if(p)p.catch(()=>{})}}
 $('l5050').onclick=()=>{if(!mark('l5050'))return;const q=Q[idx];
  shuffle(q.o.filter(o=>o.k!==q.kunci)).slice(0,2).forEach(o=>document.querySelector(`.opt[data-k="${o.k}"]`).classList.add('gone'));
@@ -417,6 +419,29 @@ document.querySelectorAll('img.brand').forEach(i=>i.src=LOGO);
   I.style.setProperty('--x',x+'px');I.style.setProperty('--y',y+'px');I.style.setProperty('--r',r+'px');
   requestAnimationFrame(frame)})(performance.now());
 })();
+
+/* ---------- text to speech ---------- */
+let ttsOn=true,qTok=0,timerOn=false,voice=null;
+const SS=window.speechSynthesis;
+function pickVoice(){if(!SS)return;voice=SS.getVoices().find(v=>/^id/i.test(v.lang))||null}
+if(SS){pickVoice();SS.onvoiceschanged=pickVoice}
+function startTimer(){if(timerOn)return;timerOn=true;timer()}
+function stopSpeech(){qTok++;if(SS)SS.cancel();A.think.volume=1}
+function skipRead(){stopSpeech();if($('game').classList.contains('on')&&!locked&&Q.length)startTimer()}
+function read(tok){
+ if(!SS||!ttsOn||muted){startTimer();return}
+ const q=Q[idx],parts=[q.soal,...q.o.map((o,i)=>'ABCD'[i]+'. '+o.t)];let i=0;
+ A.think.volume=.2;
+ const next=()=>{
+  if(tok!==qTok)return;
+  if(i>=parts.length){A.think.volume=1;startTimer();return}
+  const u=new SpeechSynthesisUtterance(parts[i++]);u.lang='id-ID';u.rate=.95;u.pitch=.95;if(voice)u.voice=voice;
+  const go=()=>{if(tok===qTok)setTimeout(next,i===1?500:250)};u.onend=go;u.onerror=go;
+  SS.speak(u)};
+ setTimeout(next,900);
+}
+$('tts').onclick=()=>{ttsOn=!ttsOn;$('tts').classList.toggle('off',!ttsOn);if(!ttsOn)skipRead()};
+if(!SS)$('tts').style.display='none';
 load();
 </script>
 </body>
